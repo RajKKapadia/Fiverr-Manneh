@@ -1,16 +1,15 @@
 const {google} = require('googleapis');
-const fs = require('fs');
 require('dotenv').config();
 
-const CREDENTIALS = JSON.parse(fs.readFileSync('server-to-server.json'));
-
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
+
+const CREDENTIALS = process.env.CREDENTIALS;
 
 const calendarId = process.env.CALENDER_ID;
 const calendar = google.calendar({version : "v3"});
 
 const auth = new google.auth.JWT(
-    process.env.CLIENT_EMAIL,
+    CREDENTIALS.client_email,
     null,
     CREDENTIALS.private_key,
     SCOPES
