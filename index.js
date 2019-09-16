@@ -24,6 +24,7 @@ const gc = require('./helper-functions/google-calender');
 
 // Schedule Appointment Action
 const scheduleAppointment = async (req) => {
+
     let timeString = req['body']['queryResult']['parameters']['time'];
     let dateString = req['body']['queryResult']['parameters']['date'];
 
@@ -43,7 +44,7 @@ const scheduleAppointment = async (req) => {
         // Check here with the airtable data
         let len = await ad.checkAppointmentExist(date, time);
 
-        if (len == 0) {
+        if (len != 3 || len < 3) {
             outString = `We are available on ${date} at ${time}. Do you want to confirm it?`;
             let session = req['body']['session'];
             let context = `${session}/contexts/await-confirmation`;
@@ -63,16 +64,34 @@ const scheduleAppointment = async (req) => {
                 }]
             };
         } else {
-            outString = `Sorry, we are not available on ${date} at ${time}.`;
-            let session = req['body']['session'];
-            let sessionVars = `${session}/contexts/sessionvars`;
-            responseText = {
-                'fulfillmentText': outString,
-                'outputContexts': [{
-                    'name': sessionVars,
-                    'lifespanCount': 0
-                }]
-            };
+            
+            let availableTimeSlots = await ad.getTimeslots(date);
+
+            if (availableTimeSlots.length == 0) {
+                outString = `Sorry, we are not available on ${date} at ${time}.`;
+                responseText = {
+                    'fulfillmentText': outString
+                }
+            } else {
+                outString = `Sorry, we are not available on ${date} at ${time}. We are free on ${date} at ${availableTimeSlots[0]}, ${availableTimeSlots[1]}, and ${availableTimeSlots[2]}`;
+                let session = req['body']['session'];
+                let rescheduleAppointment = `${session}/contexts/await-reschedule`;
+                let sessionVars = `${session}/contexts/sessionvars`;
+                responseText = {
+                    'fulfillmentText': outString,
+                    'outputContexts': [{
+                        'name': rescheduleAppointment,
+                        'lifespanCount': 1
+                    }, {
+                        'name': sessionVars,
+                        'lifespanCount': 50,
+                        'parameters': {
+                            'time': timeString,
+                            'date': dateString
+                        }
+                    }]
+                };
+            }
         }
     }
     return responseText;
@@ -100,7 +119,7 @@ const addEventInCalender = async (req) => {
     let appointmentTimeString = dateTimeStart.toLocaleString(
         'en-US',
         {
-            month: 'long', day: 'numeric', hour: 'numeric'
+            month: 'long', day: 'numeric', hour: 'numeric', timeZone: 'Asia/Kolkata'
         }
     );
 
@@ -137,6 +156,32 @@ const addEventInCalender = async (req) => {
     return responseText;
 };
 
+const rescheduleAppointment = async (req) => {
+
+    let timeString = req['body']['queryResult']['parameters']['reTime'];
+
+    outString = `What first name I use to book the appointment?`;
+    
+    let session = req['body']['session'];
+    let sessionVars = `${session}/contexts/sessionvars`;
+
+    responseText = {
+        'fulfillmentText': outString,
+        'outputContexts': [{
+            'name': `${session}/contexts/await-name`,
+            'lifespanCount': 1
+        }, {
+            'name': sessionVars,
+            'lifespanCount': 50,
+            'parameters': {
+                'time': timeString,
+            }
+        }]
+    };
+
+    return responseText;
+}
+
 webApp.post('/webhook', async (req, res) => {
 
     let action = req['body']['queryResult']['action'];
@@ -145,6 +190,8 @@ webApp.post('/webhook', async (req, res) => {
         responseText = await scheduleAppointment(req);
     } else if (action === 'user-number-entered') {
         responseText = await addEventInCalender(req);
+    } else if (action === 'reschedule-appointment') {
+        responseText = await rescheduleAppointment(req);
     }
 
     res.send(responseText);
