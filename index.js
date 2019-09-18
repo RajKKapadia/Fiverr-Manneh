@@ -16,11 +16,74 @@ webApp.get('/', (req, res) => {
     res.send(`Hello World.!`);
 });
 
-const OPENTIME = 9;
-const CLOSETIME = 21;
-
 const ad = require('./helper-functions/airtable-database');
 const gc = require('./helper-functions/google-calender');
+
+// Converts the date and time from Dialogflow into
+// date --> year-month-day
+// time --> hour:minute
+// hour --> (Integer) hour
+const getDateTimeHour = (date, time) => {
+
+    let year = date.split('T')[0].split('-')[0];
+    let month = date.split('T')[0].split('-')[1];
+    let day = date.split('T')[0].split('-')[2];
+
+    let hour = time.split('T')[1].split(':')[0];
+    let minute = time.split('T')[1].split(':')[1];
+
+    return {
+        'date': `${year}-${month}-${day}`,
+        'time': `${hour}:${minute}`,
+        'hour': parseInt(hour)
+    };
+};
+
+// Converts the date and time from Dialogflow into
+// January 18, 9:30 AM
+const dateTimeToString = (date, time) => {
+
+    let year = date.split('T')[0].split('-')[0];
+    let month = date.split('T')[0].split('-')[1];
+    let day = date.split('T')[0].split('-')[2];
+
+    let hour = time.split('T')[1].split(':')[0];
+    let minute = time.split('T')[1].split(':')[1];
+
+    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
+
+    let event = new Date(Date.parse(newDateTime));
+
+    let options = { month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric' };
+
+    return event.toLocaleDateString('en-US', options);
+};
+
+// Get date-time string for calender
+const dateTimeForCalender = (date, time) => {
+
+    let year = date.split('T')[0].split('-')[0];
+    let month = date.split('T')[0].split('-')[1];
+    let day = date.split('T')[0].split('-')[2];
+
+    let hour = time.split('T')[1].split(':')[0];
+    let minute = time.split('T')[1].split(':')[1];
+
+    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
+
+    let event = new Date(Date.parse(newDateTime));
+
+    let startDate = event;
+    let endDate = new Date(new Date(startDate).setHours(startDate.getHours()+1));
+
+    return {
+        'start': startDate,
+        'end': endDate
+    }
+};
+
+let OPENTIME = 10;
+let CLOSETIME = 20;
 
 // Schedule Appointment Action
 const scheduleAppointment = async (req) => {
@@ -28,24 +91,24 @@ const scheduleAppointment = async (req) => {
     let timeString = req['body']['queryResult']['parameters']['time'];
     let dateString = req['body']['queryResult']['parameters']['date'];
 
-    let time = timeString.split('T')[1].substring(0, 5);
-    let date = dateString.split('T')[0];
+    let dateTimeHour = getDateTimeHour(dateString, timeString);
+    let appointmentTimeString = dateTimeToString(dateString, timeString);
 
     let outString;
     let responseText = {};
 
-    if (parseInt(time.substring(0, 2)) < OPENTIME || parseInt(time.substring(0, 2)) > CLOSETIME) {
-        outString = 'We are open from 9 AM to 9 PM, please choose a time in between.';
+    if (dateTimeHour['hour'] < OPENTIME || dateTimeHour['hour'] > CLOSETIME) {
+        outString = 'We are open from 10 AM to 8 PM, please choose a time in between.';
         responseText = {'fulfillmentText': outString};
-    } else if (parseInt(time.substring(0, 2)) == OPENTIME || parseInt(time.substring(0, 2)) == CLOSETIME) {
-        outString = 'Please choose a time after 9 AM and before 9 PM.';
+    } else if (dateTimeHour['hour'] == OPENTIME || dateTimeHour['hour'] == CLOSETIME) {
+        outString = 'Please choose a time after 10 AM and before 8 PM.';
         responseText = {'fulfillmentText': outString};
     } else {
         // Check here with the airtable data
-        let len = await ad.checkAppointmentExist(date, time);
+        let len = await ad.checkAppointmentExist(dateTimeHour['date'], dateTimeHour['time']);
 
         if (len != 3 || len < 3) {
-            outString = `We are available on ${date} at ${time}. Do you want to confirm it?`;
+            outString = `We are available on ${appointmentTimeString}. Do you want to confirm it?`;
             let session = req['body']['session'];
             let context = `${session}/contexts/await-confirmation`;
             let sessionVars = `${session}/contexts/sessionvars`;
@@ -64,16 +127,17 @@ const scheduleAppointment = async (req) => {
                 }]
             };
         } else {
-            
-            let availableTimeSlots = await ad.getTimeslots(date);
+
+            let availableTimeSlots = await ad.getTimeslots(dateTimeHour['date']);
 
             if (availableTimeSlots.length == 0) {
-                outString = `Sorry, we are not available on ${date} at ${time}.`;
+                outString = `Sorry, we are not available on ${appointmentTimeString}`;
                 responseText = {
                     'fulfillmentText': outString
                 }
             } else {
-                outString = `Sorry, we are not available on ${date} at ${time}. We are free on ${date} at ${availableTimeSlots[0]}, ${availableTimeSlots[1]}, and ${availableTimeSlots[2]}`;
+
+                outString = `Sorry, we are not available on ${appointmentTimeString}. However, we are free on ${appointmentTimeString.split(',')[0]} at ${availableTimeSlots[0]}, ${availableTimeSlots[1]}, and ${availableTimeSlots[2]}`;
                 let session = req['body']['session'];
                 let rescheduleAppointment = `${session}/contexts/await-reschedule`;
                 let sessionVars = `${session}/contexts/sessionvars`;
@@ -99,10 +163,13 @@ const scheduleAppointment = async (req) => {
 
 // Insert the invent to the calender
 const addEventInCalender = async (req) => {
+
+    let outString;
     let responseText = {};
 
     let outputContexts = req['body']['queryResult']['outputContexts'];
     let name, number, time, date;
+
     outputContexts.forEach(outputContext => {
         let session = outputContext['name'];
         if (session.includes('/contexts/sessionvars')) {
@@ -113,26 +180,20 @@ const addEventInCalender = async (req) => {
         }
     });
 
-    let dateTimeStart = new Date(Date.parse(date.split('T')[0]+'T'+time.split('T')[1].split('-')[0]));
-    let dateTimeEnd = new Date(new Date(dateTimeStart).setHours(dateTimeStart.getHours()+1));
+    let calenderDates = dateTimeForCalender(date, time);
 
-    let appointmentTimeString = dateTimeStart.toLocaleString(
-        'en-US',
-        {
-            month: 'long', day: 'numeric', hour: 'numeric', timeZone: 'Asia/Kolkata'
-        }
-    );
+    let appointmentTimeString = dateTimeToString(date, time);
 
     let event = {
         'summary': `Appointment for ${name}.`,
         'description': `Customer mobile number ${number}.`,
         'start': {
-            'dateTime': dateTimeStart,
-            'timeZone': 'Asia/Kolkata',
+            'dateTime': calenderDates['start']
+            // 'timeZone': TIMEZONE,
         },
         'end': {
-            'dateTime': dateTimeEnd,
-            'timeZone': 'Asia/Kolkata',
+            'dateTime': calenderDates['end']
+            // 'timeZone': TIMEZONE,
         }
     };
 
@@ -147,10 +208,35 @@ const addEventInCalender = async (req) => {
 
     let atflag = await ad.insertAppointment(fields);
 
+    // Reset all the context
+    let session = req['body']['session'];
+    let awaitName = `${session}/contexts/await-number`;
+    let sessionVars = `${session}/contexts/sessionvars`;
+
     if (flag == 1 && atflag == 1) {
-        responseText['fulfillmentText'] = `Appointment is set for ${appointmentTimeString}.`;
+        outString = `Appointment is set for ${appointmentTimeString}.`;
+        responseText = {
+            'fulfillmentText': outString,
+            'outputContexts': [{
+                'name': awaitName,
+                'lifespanCount': 0
+            }, {
+                'name': sessionVars,
+                'lifespanCount': 0,
+            }]
+        };
     } else {
-        responseText['fulfillmentText'] = 'An error occured, please try after some time.';
+        outString = 'An error occured, please try again after some time.';
+        responseText = {
+            'fulfillmentText': outString,
+            'outputContexts': [{
+                'name': awaitName,
+                'lifespanCount': 0
+            }, {
+                'name': sessionVars,
+                'lifespanCount': 0,
+            }]
+        };
     }
 
     return responseText;
