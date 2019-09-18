@@ -188,12 +188,12 @@ const addEventInCalender = async (req) => {
         'summary': `Appointment for ${name}.`,
         'description': `Customer mobile number ${number}.`,
         'start': {
-            'dateTime': calenderDates['start']
-            // 'timeZone': TIMEZONE,
+            'dateTime': calenderDates['start'],
+            'timeZone': 'America/Mexico_City'
         },
         'end': {
-            'dateTime': calenderDates['end']
-            // 'timeZone': TIMEZONE,
+            'dateTime': calenderDates['end'],
+            'timeZone': 'America/Mexico_City'
         }
     };
 
