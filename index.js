@@ -69,7 +69,7 @@ const dateTimeForCalender = (date, time) => {
     let hour = time.split('T')[1].split(':')[0];
     let minute = time.split('T')[1].split(':')[1];
 
-    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
+    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}-05:00`;
 
     let event = new Date(Date.parse(newDateTime));
 
@@ -218,11 +218,11 @@ const addEventInCalender = async (req) => {
         'description': `Customer mobile number ${number}.`,
         'start': {
             'dateTime': calenderDates['start'],
-            // 'timeZone': 'America/Mexico_City'
+            'timeZone': 'America/Mexico_City'
         },
         'end': {
             'dateTime': calenderDates['end'],
-            // 'timeZone': 'America/Mexico_City'
+            'timeZone': 'America/Mexico_City'
         }
     };
 
