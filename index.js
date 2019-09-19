@@ -206,6 +206,8 @@ const addEventInCalender = async (req) => {
         }
         if (session.includes('/contexts/generic')) {
             facebookID = outputContext['parameters']['facebook_sender_id'];
+        } else {
+            facebookID = 'No Facebook User';
         }
     });
 
