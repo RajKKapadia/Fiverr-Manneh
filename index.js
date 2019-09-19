@@ -82,6 +82,26 @@ const dateTimeForCalender = (date, time) => {
     }
 };
 
+const convertTime24to12 = (time24) => {
+
+    let tmpArr = time24.split(':'), time12;
+    
+    if (+tmpArr[0] == 12) {
+        time12 = tmpArr[0] + ':' + tmpArr[1] + ' PM';
+    } else {
+        if (+tmpArr[0] == 00) {
+            time12 = '12:' + tmpArr[1] + ' AM';
+        } else {
+            if (+tmpArr[0] > 12) {
+                time12 = (+tmpArr[0] - 12) + ':' + tmpArr[1] + ' PM';
+            } else {
+                time12 = (+tmpArr[0]) + ':' + tmpArr[1] + ' AM';
+            }
+        }
+    }
+    return time12;
+};
+
 let OPENTIME = 10;
 let CLOSETIME = 20;
 
@@ -130,6 +150,12 @@ const scheduleAppointment = async (req) => {
 
             let availableTimeSlots = await ad.getTimeslots(dateTimeHour['date']);
 
+            let ATS12Hr = [];
+
+            availableTimeSlots.forEach(slot => {
+                ATS12Hr.push(convertTime24to12(slot));
+            });
+
             if (availableTimeSlots.length == 0) {
                 outString = `Sorry, we are not available on ${appointmentTimeString}`;
                 responseText = {
@@ -137,7 +163,7 @@ const scheduleAppointment = async (req) => {
                 }
             } else {
 
-                outString = `Sorry, we are not available on ${appointmentTimeString}. However, we are free on ${appointmentTimeString.split(',')[0]} at ${availableTimeSlots[0]}, ${availableTimeSlots[1]}, and ${availableTimeSlots[2]}`;
+                outString = `Sorry, we are not available on ${appointmentTimeString}. However, we are free on ${appointmentTimeString.split(',')[0]} at ${ATS12Hr[0]}, ${ATS12Hr[1]}, and ${ATS12Hr[2]}`;
                 let session = req['body']['session'];
                 let rescheduleAppointment = `${session}/contexts/await-reschedule`;
                 let sessionVars = `${session}/contexts/sessionvars`;
@@ -168,15 +194,18 @@ const addEventInCalender = async (req) => {
     let responseText = {};
 
     let outputContexts = req['body']['queryResult']['outputContexts'];
-    let name, number, time, date;
+    let name, number, time, date, facebookID;
 
     outputContexts.forEach(outputContext => {
         let session = outputContext['name'];
         if (session.includes('/contexts/sessionvars')) {
-            name = outputContext['parameters']['given-name'];
+            name = outputContext['parameters']['given-name']['name'];
             number = outputContext['parameters']['phone-number'];
             time = outputContext['parameters']['time'];
             date = outputContext['parameters']['date'];
+        }
+        if (session.includes('/contexts/generic')) {
+            facebookID = outputContext['parameters']['facebook_sender_id'];
         }
     });
 
@@ -203,7 +232,8 @@ const addEventInCalender = async (req) => {
         'Name': name,
         'Mobile Number': number,
         'Appointment Date': date.split('T')[0],
-        'Appointment Time': time.split('T')[1].substring(0, 5)
+        'Appointment Time': time.split('T')[1].substring(0, 5),
+        'FacebookID': facebookID
     }
 
     let atflag = await ad.insertAppointment(fields);
