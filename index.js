@@ -69,7 +69,7 @@ const dateTimeForCalander = (date, time) => {
     let hour = time.split('T')[1].split(':')[0];
     let minute = time.split('T')[1].split(':')[1];
 
-    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
+    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}:00.000+05:30`;
 
     let event = new Date(Date.parse(newDateTime));
 
