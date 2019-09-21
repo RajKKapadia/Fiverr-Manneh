@@ -59,6 +59,8 @@ const dateTimeToString = (date, time) => {
     return event.toLocaleDateString('en-US', options);
 };
 
+const TIMEOFFSET = '+05:30';
+
 // Get date-time string for calender
 const dateTimeForCalander = (date, time) => {
 
@@ -69,7 +71,7 @@ const dateTimeForCalander = (date, time) => {
     let hour = time.split('T')[1].split(':')[0];
     let minute = time.split('T')[1].split(':')[1];
 
-    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}:00.000+05:30`;
+    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}:00.000${TIMEOFFSET}`;
 
     let event = new Date(Date.parse(newDateTime));
 
