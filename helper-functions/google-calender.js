@@ -30,6 +30,22 @@ const insertEvent = async (event) => {
     }
 };
 
+const getEvents = async (dateTimeStart, dateTimeEnd, timeZone) => {
+
+    let response = await calendar.events.list({
+        auth: auth,
+        calendarId: calendarId,
+        timeMin: dateTimeStart,
+        timeMax: dateTimeEnd,
+        timeZone: timeZone
+    });
+
+    let len = response['data']['items'].length;
+
+    return len;
+};
+
 module.exports = {
-    insertEvent
+    insertEvent,
+    getEvents
 }

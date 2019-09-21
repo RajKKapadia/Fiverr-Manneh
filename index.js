@@ -60,7 +60,7 @@ const dateTimeToString = (date, time) => {
 };
 
 // Get date-time string for calender
-const dateTimeForCalender = (date, time) => {
+const dateTimeForCalander = (date, time) => {
 
     let year = date.split('T')[0].split('-')[0];
     let month = date.split('T')[0].split('-')[1];
@@ -69,7 +69,7 @@ const dateTimeForCalender = (date, time) => {
     let hour = time.split('T')[1].split(':')[0];
     let minute = time.split('T')[1].split(':')[1];
 
-    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}-05:00`;
+    let newDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
 
     let event = new Date(Date.parse(newDateTime));
 
@@ -82,6 +82,7 @@ const dateTimeForCalender = (date, time) => {
     }
 };
 
+// Converts 24 hrs time into 12 hrs time
 const convertTime24to12 = (time24) => {
 
     let tmpArr = time24.split(':'), time12;
@@ -102,8 +103,10 @@ const convertTime24to12 = (time24) => {
     return time12;
 };
 
-let OPENTIME = 10;
-let CLOSETIME = 20;
+const OPENTIME = 10;
+const CLOSETIME = 20;
+
+const TIMEZONE = 'Asia/Kolkata';
 
 // Schedule Appointment Action
 const scheduleAppointment = async (req) => {
@@ -113,19 +116,32 @@ const scheduleAppointment = async (req) => {
 
     let dateTimeHour = getDateTimeHour(dateString, timeString);
     let appointmentTimeString = dateTimeToString(dateString, timeString);
+    let dateTimeCalander = dateTimeForCalander(dateString, timeString);
 
     let outString;
     let responseText = {};
 
+    // If time is out of range for opening and closing hours
     if (dateTimeHour['hour'] < OPENTIME || dateTimeHour['hour'] > CLOSETIME) {
         outString = 'We are open from 10 AM to 8 PM, please choose a time in between.';
         responseText = {'fulfillmentText': outString};
+    // If time is exactly same as opening and closing hours
     } else if (dateTimeHour['hour'] == OPENTIME || dateTimeHour['hour'] == CLOSETIME) {
         outString = 'Please choose a time after 10 AM and before 8 PM.';
         responseText = {'fulfillmentText': outString};
+    // If time is good then check for the existing appointments
     } else {
         // Check here with the airtable data
-        let len = await ad.checkAppointmentExist(dateTimeHour['date'], dateTimeHour['time']);
+        // let len = await ad.checkAppointmentExist(dateTimeHour['date'], dateTimeHour['time']);
+
+        //
+
+        //    your code should be here and it should return the numbers of appointment at the
+        //    perticular time  
+
+        //
+
+        let len = await gc.getEvents(dateTimeCalander['start'], dateTimeCalander['end'], TIMEZONE);
 
         if (len != 3 || len < 3) {
             outString = `We are available on ${appointmentTimeString}. Do you want to confirm it?`;
@@ -148,6 +164,9 @@ const scheduleAppointment = async (req) => {
             };
         } else {
 
+            // If we are full at the give time and date
+            // Show some options to the user
+
             let availableTimeSlots = await ad.getTimeslots(dateTimeHour['date']);
 
             let ATS12Hr = [];
@@ -155,14 +174,14 @@ const scheduleAppointment = async (req) => {
             availableTimeSlots.forEach(slot => {
                 ATS12Hr.push(convertTime24to12(slot));
             });
-
+            // If by chance we don't have any free slot
             if (availableTimeSlots.length == 0) {
                 outString = `Sorry, we are not available on ${appointmentTimeString}`;
                 responseText = {
                     'fulfillmentText': outString
                 }
             } else {
-
+                // Show the free time slots
                 outString = `Sorry, we are not available on ${appointmentTimeString}. However, we are free on ${appointmentTimeString.split(',')[0]} at ${ATS12Hr[0]}, ${ATS12Hr[1]}, and ${ATS12Hr[2]}`;
                 let session = req['body']['session'];
                 let rescheduleAppointment = `${session}/contexts/await-reschedule`;
@@ -209,7 +228,7 @@ const addEventInCalender = async (req) => {
         }
     });
 
-    let calenderDates = dateTimeForCalender(date, time);
+    let calenderDates = dateTimeForCalander(date, time);
 
     let appointmentTimeString = dateTimeToString(date, time);
 
@@ -218,14 +237,15 @@ const addEventInCalender = async (req) => {
         'description': `Customer mobile number ${number}.`,
         'start': {
             'dateTime': calenderDates['start'],
-            'timeZone': 'America/Mexico_City'
+            'timeZone': TIMEZONE
         },
         'end': {
             'dateTime': calenderDates['end'],
-            'timeZone': 'America/Mexico_City'
+            'timeZone': TIMEZONE
         }
     };
 
+    // Insert the data to Google Calender
     let flag = await gc.insertEvent(event);
 
     let fields = {
@@ -235,7 +255,7 @@ const addEventInCalender = async (req) => {
         'Appointment Time': time.split('T')[1].substring(0, 5),
         'FacebookID': facebookID
     }
-
+    // Insert the data to the Airtable
     let atflag = await ad.insertAppointment(fields);
 
     // Reset all the context
@@ -272,6 +292,7 @@ const addEventInCalender = async (req) => {
     return responseText;
 };
 
+// When user chooses the time slots provided by us
 const rescheduleAppointment = async (req) => {
 
     let timeString = req['body']['queryResult']['parameters']['reTime'];
